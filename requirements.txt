@@ -4,3 +4,4 @@ pyzbar==0.1.9
 streamlit==1.36.0
 qrcode==7.4.2
 pillow==10.4.0
+dropbox==12.0.2
