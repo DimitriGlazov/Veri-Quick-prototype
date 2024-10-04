@@ -1,22 +1,32 @@
-''' Creating a web Server to make sure the EDV's function 
+'''
+ Creating a web Server to make sure the EDV's function 
  Process : -
 1: File upload condition  
 2: Data storage and excecution with the links 
 3: Retrieve the file link in the QR format to make the application redirect 
 to the created link 
+
 '''
 
 # importing modules 
 import streamlit as st
-import numpy as np 
-import os 
+import dropbox
 import qrcode
-import pyzbar
+from PIL import Image
+import io
+
+
+# Dropbox access token
+ACCESS_TOKEN = "sl.B-KmNulEgqRehqS4Ckbwk2L8P7WXQ7-o7qrvomgpBorbtSXj-jE0Q05-uqlyschPd4ezJtLn4D4kTTqDkIDfXn1CQ3XQllnQhNcYe87APSTORNXlkJSOQ7Lqmhwp4jtoRTHnaVTdee-z8AB0Rc_MIN0"
+App_key = "xbqf7r8ytc62kiu"
+
+# Initialize Dropbox client
+dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
 # Homepage 
 st.set_page_config(page_title="EDV file uploader")
 st.header("EDV file uploader")
-st.subheader('Upload files to store and retrieve QR codes')
+st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
 
 # Setting up file upload condition 
 uploadedfiles = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'])
@@ -29,18 +39,78 @@ if uploadedfiles is not None:
 else:
     st.warning("File wasn't uploaded, please reupload the file")
 
-# Storing the data  
-if not os.path.exists('uploaded_files'):
-    os.makedirs('uploaded_files')
-
-def save_upload(uploadedfile):
+# Function to upload file to Dropbox and get the link
+def upload_to_dropbox(uploadedfile):
     try:
-        with open(os.path.join('uploaded_files', uploadedfile.name), 'wb') as file:
-            file.write(uploadedfile.getbuffer())
-        st.success(f"Successfully saved the file: {uploadedfile.name} in directory")
+        file_path = f"/{uploadedfile.name}"
+        dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
+        shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
+        file_link = shared_link_metadata.url
+        st.success(f"Successfully uploaded {uploadedfile.name} to Dropbox")
+        return file_link
     except Exception as e:
-        st.error(f"An error occurred while saving the file: {e}")
+        st.error(f"An error occurred while uploading the file: {e}")
+        return None
 
+# Function to generate QR code from a link
+def generate_qr_code(link):
+    qr = qrcode.QRCode(
+        version=1,
+         error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(link)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    return img
+
+# Function to convert PIL Image to bytes
+def pil_image_to_bytes(img):
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    byte_im = buf.getvalue()
+    return byte_im
+
+# Upload the file to Dropbox and generate QR code
 if uploadedfiles is not None:
-    save_upload(uploadedfiles)
+    file_link = upload_to_dropbox(uploadedfiles)
+    if file_link:
+        st.write(f"File link: Click here")
+        qr_image = generate_qr_code(file_link)
+        qr_image_bytes = pil_image_to_bytes(qr_image)
+        st.image(qr_image_bytes, caption='QR code for the file link')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
