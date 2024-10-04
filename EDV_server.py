@@ -17,7 +17,7 @@ import io
 
 
 # Dropbox access token
-ACCESS_TOKEN = "sl.B-KmNulEgqRehqS4Ckbwk2L8P7WXQ7-o7qrvomgpBorbtSXj-jE0Q05-uqlyschPd4ezJtLn4D4kTTqDkIDfXn1CQ3XQllnQhNcYe87APSTORNXlkJSOQ7Lqmhwp4jtoRTHnaVTdee-z8AB0Rc_MIN0"
+ACCESS_TOKEN = "sl.B-JfBKHfR58x8Az_wjLcNyOZ6hnKl6mJWpk6XZ0R-UNNpKV1IKgaFAK46ZLlH22aTnqAoDNRmVy95rT13K2_YmdgMyQv9ib2lZGfYnEk1YbwlqVDgRkyHogfm09faToaCxRC-azvKHMi2xsDjL4D5JE"
 App_key = "xbqf7r8ytc62kiu"
 
 # Initialize Dropbox client
