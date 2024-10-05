@@ -1,43 +1,35 @@
-'''
- Creating a web Server to make sure the EDV's function 
- Process : -
-1: File upload condition  
-2: Data storage and excecution with the links 
-3: Retrieve the file link in the QR format to make the application redirect 
+"""
+Creating a web Server to make sure the EDV's function 
+Process:
+1. File upload condition  
+2. Data storage and execution with the links 
+3. Retrieve the file link in the QR format to make the application redirect 
 to the created link 
+"""
 
-'''
-
-# importing modules 
+# Importing modules 
 import streamlit as st
 import dropbox
 import qrcode
 from PIL import Image
 import io
 
-
-# Dropbox access token
-ACCESS_TOKEN = "sl.B-JfBKHfR58x8Az_wjLcNyOZ6hnKl6mJWpk6XZ0R-UNNpKV1IKgaFAK46ZLlH22aTnqAoDNRmVy95rT13K2_YmdgMyQv9ib2lZGfYnEk1YbwlqVDgRkyHogfm09faToaCxRC-azvKHMi2xsDjL4D5JE"
-App_key = "xbqf7r8ytc62kiu"
-
-# Initialize Dropbox client
-dbx = dropbox.Dropbox(ACCESS_TOKEN)
-
 # Homepage 
 st.set_page_config(page_title="EDV file uploader")
 st.header("EDV file uploader")
 st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
 
+# Dropbox access token (Getting it from environment variables)
+ACCESS_TOKEN = st.secrets["dropbox"]['access_token']
+
+# Initialize Dropbox client
+if ACCESS_TOKEN:
+    dbx = dropbox.Dropbox(ACCESS_TOKEN)
+else:
+    st.error("Dropbox access token is missing. Please set the environment variable 'DROPBOX_OAUTH2_KEY'.")
+
 # Setting up file upload condition 
 uploadedfiles = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'])
-
-# Instructions 
-
-# If the files are uploaded then 
-if uploadedfiles is not None:
-    st.success('File uploaded successfully')
-else:
-    st.warning("File wasn't uploaded, please reupload the file")
 
 # Function to upload file to Dropbox and get the link
 def upload_to_dropbox(uploadedfile):
@@ -56,7 +48,7 @@ def upload_to_dropbox(uploadedfile):
 def generate_qr_code(link):
     qr = qrcode.QRCode(
         version=1,
-         error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
         box_size=10,
         border=4,
     )
@@ -76,41 +68,7 @@ def pil_image_to_bytes(img):
 if uploadedfiles is not None:
     file_link = upload_to_dropbox(uploadedfiles)
     if file_link:
-        st.write(f"File link: Click here")
+        st.markdown(f"[**Click here to download the file**]({file_link})", unsafe_allow_html=True)
         qr_image = generate_qr_code(file_link)
         qr_image_bytes = pil_image_to_bytes(qr_image)
         st.image(qr_image_bytes, caption='QR code for the file link')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
