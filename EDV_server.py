@@ -20,7 +20,7 @@ st.header("EDV file uploader")
 st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
 
 # Dropbox access token (Getting it from environment variables)
-ACCESS_TOKEN = st.secrets["dropbox"]['access_token']
+ACCESS_TOKEN = st.secrets["dropbox"]
 
 # Initialize Dropbox client
 if ACCESS_TOKEN:
