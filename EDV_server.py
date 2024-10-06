@@ -15,9 +15,9 @@ from PIL import Image
 import io
 
 # Homepage 
-st.set_page_config(page_title="EDV file uploader")
+st.set_page_config(page_title=" 🗃️ EDV file uploader")
 st.header("EDV file uploader")
-st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
+st.subheader('Upload files to store and retrieve QR ')
 
 # Dropbox access token (Getting it from environment variables)
 ACCESS_TOKEN = st.secrets["dropbox"]
