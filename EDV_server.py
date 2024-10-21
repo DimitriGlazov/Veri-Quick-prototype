@@ -36,13 +36,18 @@ def upload_to_dropbox(uploadedfile):
     try:
         file_path = f"/{uploadedfile.name}"
         dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
-        shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
-        file_link = shared_link_metadata.url
-        st.success(f"Successfully uploaded {uploadedfile.name} to Dropbox")
+        shared_link_metadata = dbx.sharing_list_shared_links(file_path)
+        if shared_link_metadata.links:
+            st.success(f"A shared link already exists for {uploadedfile.name}.")
+            file_link = shared_link_metadata.links[0].url
+        else:
+            shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
+            file_link = shared_link_metadata.url
+            st.success(f"Successfully uploaded {uploadedfile.name} to Dropbox")
         return file_link
     except Exception as e:
         st.error(f"An error occurred while uploading the file: {e}")
-        return None
+        return
 
 # Function to generate QR code from a link
 def generate_qr_code(link):
