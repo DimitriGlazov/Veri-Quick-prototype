@@ -73,7 +73,6 @@ def pil_image_to_bytes(img):
 if uploadedfiles is not None:
     file_link = upload_to_dropbox(uploadedfiles)
     if file_link:
-        st.markdown(f"[** See the uploaded file**]({file_link})", unsafe_allow_html=True)
         qr_image = generate_qr_code(file_link)
         qr_image_bytes = pil_image_to_bytes(qr_image)
         st.image(qr_image_bytes, caption='QR code for the file link')
