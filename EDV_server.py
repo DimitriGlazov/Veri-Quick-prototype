@@ -72,4 +72,4 @@ if uploadedfiles is not None:
         qr_image = generate_qr_code(file_link)
         qr_image_bytes = pil_image_to_bytes(qr_image)
         st.image(qr_image_bytes, caption='QR code for the file link')
-        st.download_button(label="Download QR code",data=qr_image_bytes,file_name="qr_code.png",mime="image/png")
+       
