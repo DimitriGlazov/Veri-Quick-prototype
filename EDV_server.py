@@ -43,7 +43,7 @@ def upload_to_dropbox(uploadedfile):
         else:
             shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
             file_link = shared_link_metadata.url
-            st.success(f"Successfully uploaded {uploadedfile.name} to Dropbox")
+            st.success(f"Successfully uploaded {uploadedfile.name} to Server ! ")
         return file_link
     except Exception as e:
         st.error(f"An error occurred while uploading the file: {e}")
