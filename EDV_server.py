@@ -14,6 +14,7 @@ import qrcode
 from PIL import Image
 import io
 import requests
+import uuid  # For generating unique folder names
 
 # Homepage 
 st.set_page_config(page_title=" 🗄️ EDV file uploader")
@@ -35,22 +36,36 @@ else:
 # Setting up file upload condition 
 uploaded_files = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'], accept_multiple_files=True)
 
-# Function to upload file to Dropbox and get the link
-def upload_to_dropbox(uploaded_file):
+# Function to create a folder in Dropbox
+def create_folder(folder_name):
     try:
-        file_path = f"/{uploaded_file.name}"
+        dbx.files_create_folder_v2(f"/{folder_name}")
+        return f"/{folder_name}"
+    except dropbox.exceptions.ApiError as e:
+        st.error(f"Failed to create folder: {e}")
+        return None
+
+# Function to upload file to Dropbox and get the link
+def upload_to_dropbox(uploaded_file, folder_path):
+    try:
+        file_path = f"{folder_path}/{uploaded_file.name}"
         dbx.files_upload(uploaded_file.getbuffer().tobytes(), file_path)
-        shared_link_metadata = dbx.sharing_list_shared_links(file_path)
-        if shared_link_metadata.links:
-            st.success(f"A shared link already exists for {uploaded_file.name}.")
-            file_link = shared_link_metadata.links[0].url
-        else:
-            shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
-            file_link = shared_link_metadata.url
-            st.success(f"Successfully uploaded {uploaded_file.name} to Dropbox")
-        return file_link
+        return file_path  # Return the path of the uploaded file
     except Exception as e:
         st.error(f"An error occurred while uploading the file: {e}")
+        return None
+
+# Function to generate a shared link for the folder
+def get_shared_link(folder_path):
+    try:
+        shared_link_metadata = dbx.sharing_list_shared_links(folder_path)
+        if shared_link_metadata.links:
+            return shared_link_metadata.links[0].url
+        else:
+            shared_link_metadata = dbx.sharing_create_shared_link_with_settings(folder_path)
+            return shared_link_metadata.url
+    except Exception as e:
+        st.error(f"An error occurred while getting shared link: {e}")
         return None
 
 # Function to generate QR code from a link
@@ -97,25 +112,33 @@ def check_access_token():
     except dropbox.exceptions.AuthError:
         return False
 
-# Upload multiple files to Dropbox and generate QR codes
+# Upload multiple files to Dropbox and generate QR code for the folder
 if uploaded_files:
     if not check_access_token():
         ACCESS_TOKEN, REFRESH_TOKEN = refresh_access_token(REFRESH_TOKEN)
         dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
-    # Loop through each file and process it
-    for uploaded_file in uploaded_files:
-        file_link = upload_to_dropbox(uploaded_file)
-        if file_link:
-            st.markdown(f"[**View the file {uploaded_file.name}**]({file_link})", unsafe_allow_html=True)
+    # Create a unique folder name using UUID
+    folder_name = f"Uploaded_Files_{uuid.uuid4()}"
+    folder_path = create_folder(folder_name)
+
+    if folder_path:
+        # Loop through each file and upload it to the new folder
+        for uploaded_file in uploaded_files:
+            upload_to_dropbox(uploaded_file, folder_path)
+
+        # Get shared link for the folder
+        folder_link = get_shared_link(folder_path)
+        if folder_link:
+            st.markdown(f"[**View all uploaded files in this folder**]({folder_link})", unsafe_allow_html=True)
             
-            # Generate and display the QR code for the file link
-            qr_image = generate_qr_code(file_link)
+            # Generate and display the QR code for the folder link
+            qr_image = generate_qr_code(folder_link)
             qr_image_bytes = pil_image_to_bytes(qr_image)
-            st.image(qr_image_bytes, caption=f'QR code for {uploaded_file.name}')
+            st.image(qr_image_bytes, caption='QR code for the folder link')
             
-            # Provide download button for each QR code
-            st.download_button(label=f"Download QR code for {uploaded_file.name}",
+            # Provide download button for the QR code
+            st.download_button(label="Download QR code for folder",
                                data=qr_image_bytes,
-                               file_name=f"qr_code_{uploaded_file.name}.png",
+                               file_name=f"qr_code_{folder_name}.png",
                                mime="image/png")
