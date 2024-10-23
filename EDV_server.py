@@ -18,8 +18,9 @@ import uuid  # For generating unique folder names
 
 # Homepage 
 st.set_page_config(page_title=" 🗄️ EDV file uploader")
-st.header("EDV file uploader")
-st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
+st.header("🗄️ EDV file uploader")
+st.subheader("let's make paperless verification")
+st.subheader('Upload files to get started')
 
 # Get secrets from Streamlit secrets management
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
@@ -130,7 +131,7 @@ if uploaded_files:
         # Get shared link for the folder
         folder_link = get_shared_link(folder_path)
         if folder_link:
-            st.markdown(f"[**View all uploaded files in this folder**]({folder_link})", unsafe_allow_html=True)
+            st.markdown(f"[** View uploaded files**]({folder_link})", unsafe_allow_html=True)
             
             # Generate and display the QR code for the folder link
             qr_image = generate_qr_code(folder_link)
