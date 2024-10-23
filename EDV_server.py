@@ -33,7 +33,7 @@ else:
     st.error("Dropbox access token is missing. Please set the environment variable 'DROPBOX_OAUTH2_KEY'.")
 
 # Setting up file upload condition 
-uploadedfiles = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'])
+uploadedfiles = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'],accept_multiple_files=True)
 
 # Function to upload file to Dropbox and get the link
 def upload_to_dropbox(uploadedfile):
