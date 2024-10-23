@@ -16,7 +16,7 @@ import io
 import requests
 
 # Homepage 
-st.set_page_config(page_title="EDV file uploader")
+st.set_page_config(page_title=" 🗄️ EDV file uploader")
 st.header("EDV file uploader")
 st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
 
