@@ -19,7 +19,7 @@ import uuid  # For generating unique folder names
 # Homepage 
 st.set_page_config(page_title=" 🗄️ EDV file uploader")
 st.header("🗄️ EDV file uploader")
-st.subheader("let's make paperless verification")
+st.subheader("let's make verification paperless ")
 st.subheader('Upload files to get started')
 
 # Get secrets from Streamlit secrets management
