@@ -1,102 +1,83 @@
-import cv2
-import pyzbar.pyzbar as pyzbar
-import webbrowser
+# Importing necessary modules
+import streamlit as st
+import dropbox
+import qrcode
+from PIL import Image
 import json
-import requests
-from PyPDF2 import PdfFileReader
 import io
-import re
-from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtCore import QTimer
 
-class QRScannerApp(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(3, 1280)  # Width
-        self.cap.set(4, 720)   # Height
-        self.qr_data = None
+# Homepage
+st.set_page_config(page_title=" 🗄️ EDV file uploader")
+st.header("EDV file uploader")
+st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
 
-        # Timer to update the video feed
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(2)
+# Get secrets from Streamlit secrets management
+ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
+REFRESH_TOKEN = st.secrets["dropbox"]["refresh_token"]
+CLIENT_ID = st.secrets["dropbox"]["client_id"]
+CLIENT_SECRET = st.secrets["dropbox"]["client_secret"]
 
-    def initUI(self):
-        # Set up the window
-        self.setWindowTitle("EDV QR Scanner")
-        self.image_label = QLabel(self)
-        layout = QVBoxLayout()
-        layout.addWidget(self.image_label)
-        self.setLayout(layout)
-        self.show()
+# Initialize Dropbox client
+dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
-    def update_frame(self):
-        success, image = self.cap.read()
-        if not success:
-            return
+# Function to upload a file to Dropbox and get the link
+def upload_to_dropbox(uploadedfile, filename):
+    try:
+        file_path = f"/EDV/{filename}"
+        dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
+        shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
+        file_link = shared_link_metadata.url.replace('?dl=0', '?dl=1')  # Direct download link
+        return file_link
+    except Exception as e:
+        st.error(f"An error occurred while uploading the file: {e}")
+        return None
 
-        # Decode the QR code in the image
-        decoded_objs = pyzbar.decode(image)
+# Function to generate QR code with metadata
+def generate_qr_code_with_metadata(files_metadata):
+    metadata = {"files": files_metadata}  # Embed list of files and their metadata
+    qr_data = json.dumps(metadata)
+    
+    # Generate the QR code
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    
+    return img
 
-        if decoded_objs:
-            for obj in decoded_objs:
-                data = obj.data.decode('utf-8')
-                metadata = json.loads(data)
+# Function to convert PIL Image to bytes
+def pil_image_to_bytes(img):
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    byte_im = buf.getvalue()
+    return byte_im
 
-                document_url = metadata.get("document_url")
-                document_type = metadata.get("document_type")
+# Upload section
+uploaded_files = st.file_uploader('Upload multiple documents (Aadhaar, PAN, etc.)', type=['pdf', 'jpeg', 'jpg', 'png'], accept_multiple_files=True)
 
-                if document_type == "Aadhaar":
-                    # Fetch and verify Aadhaar document
-                    self.verify_aadhaar(document_url)
-                else:
-                    # Open non-Aadhaar document in a browser
-                    webbrowser.open(document_url)
-
-                break  # Stop after processing the first QR code
-
-        # Convert the image to RGB and display it
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(convert_to_qt_format)
-        self.image_label.setPixmap(pixmap)
-
-    def verify_aadhaar(self, document_url):
-        response = requests.get(document_url)
-        document_content = response.content
-
-        # Example assumes document is a PDF containing text
-        pdf_reader = PdfFileReader(io.BytesIO(document_content))
-        text = ""
-        for page_num in range(pdf_reader.numPages):
-            text += pdf_reader.getPage(page_num).extractText()
-
-        # Extract Aadhaar number using regex
-        aadhaar_match = re.search(r'\d{4}\s\d{4}\s\d{4}', text)
-        if aadhaar_match:
-            aadhaar_number = aadhaar_match.group(0)
-            if self.validate_aadhaar(aadhaar_number):
-                print(f"Valid Aadhaar: {aadhaar_number}")
-            else:
-                print(f"Invalid Aadhaar: {aadhaar_number}")
-        else:
-            print("No Aadhaar number found in the document.")
-
-    def validate_aadhaar(self, aadhaar_number):
-        # Simple validation logic (e.g., checksum validation) or integrate with a government API
-        # Placeholder logic for now
-        return True  # For demo purposes
-
-    def closeEvent(self, event):
-        self.cap.release()
-        cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    qr_scanner_app = QRScannerApp()
-    sys.exit(app.exec_())
+if uploaded_files is not None:
+    files_metadata = []
+    
+    # Loop through each uploaded file
+    for uploaded_file in uploaded_files:
+        document_type = st.selectbox(f"Select document type for {uploaded_file.name}", ["Aadhaar", "PAN", "Passport", "Other"])
+        
+        # Upload file to Dropbox
+        file_link = upload_to_dropbox(uploaded_file, uploaded_file.name)
+        if file_link:
+            # Add file metadata (link and document type)
+            files_metadata.append({
+                "document_url": file_link,
+                "document_type": document_type
+            })
+    
+    # Generate QR code for all uploaded files' metadata
+    if files_metadata:
+        qr_image = generate_qr_code_with_metadata(files_metadata)
+        qr_image_bytes = pil_image_to_bytes(qr_image)
+        
+        # Display QR code
+        st.image(qr_image_bytes, caption='QR code with metadata for uploaded files')
+        
+        # Download button for QR code
+        st.download_button(label="Download QR code", data=qr_image_bytes, file_name="qr_code.png", mime="image/png")
