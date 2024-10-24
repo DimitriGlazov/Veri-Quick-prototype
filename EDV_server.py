@@ -23,6 +23,7 @@ dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
 # Function to refresh access token
 def refresh_access_token():
+    global ACCESS_TOKEN, REFRESH_TOKEN, dbx  # Declare global variables
     url = "https://api.dropboxapi.com/oauth2/token"
     data = {
         "grant_type": "refresh_token",
@@ -33,13 +34,18 @@ def refresh_access_token():
     response = requests.post(url, data=data)
     
     if response.status_code == 200:
-        return response.json().get("access_token"), response.json().get("refresh_token")
+        # Update global variables with new tokens
+        ACCESS_TOKEN = response.json().get("access_token")
+        REFRESH_TOKEN = response.json().get("refresh_token")
+        dbx = dropbox.Dropbox(ACCESS_TOKEN)  # Re-initialize Dropbox client
+        return True
     else:
         st.error(f"Failed to refresh access token: {response.json()}")
-        return None, None
+        return False
 
 # Function to upload a file to Dropbox and get the link
 def upload_to_dropbox(uploadedfile, filename):
+    global dbx  # Declare dbx as global
     try:
         file_path = f"/EDV/{filename}"
         dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
@@ -49,12 +55,7 @@ def upload_to_dropbox(uploadedfile, filename):
     except dropbox.exceptions.AuthError as e:
         # If there's an auth error, refresh the access token
         st.warning("Access token expired. Refreshing token...")
-        new_access_token, new_refresh_token = refresh_access_token()
-        if new_access_token:
-            global ACCESS_TOKEN, REFRESH_TOKEN
-            ACCESS_TOKEN = new_access_token
-            REFRESH_TOKEN = new_refresh_token
-            dbx = dropbox.Dropbox(ACCESS_TOKEN)
+        if refresh_access_token():
             # Retry file upload after refreshing token
             return upload_to_dropbox(uploadedfile, filename)
         else:
