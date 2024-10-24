@@ -1,145 +1,102 @@
-"""
-Creating a web Server to make sure the EDV's function 
-Process:
-1. File upload condition  
-2. Data storage and execution with the links 
-3. Retrieve the file link in the QR format to make the application redirect 
-to the created link 
-"""
-
-# Importing modules 
-import streamlit as st
-import dropbox
-import qrcode
-from PIL import Image
-import io
+import cv2
+import pyzbar.pyzbar as pyzbar
+import webbrowser
+import json
 import requests
-import uuid  # For generating unique folder names
+from PyPDF2 import PdfFileReader
+import io
+import re
+from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import QTimer
 
-# Homepage 
-st.set_page_config(page_title=" 🗄️ EDV file uploader")
-st.header("🗄️ EDV file uploader")
-st.subheader("let's make verification paperless ")
-st.subheader('Upload files to get started')
+class QRScannerApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.cap = cv2.VideoCapture(0)
+        self.cap.set(3, 1280)  # Width
+        self.cap.set(4, 720)   # Height
+        self.qr_data = None
 
-# Get secrets from Streamlit secrets management
-ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
-REFRESH_TOKEN = st.secrets["dropbox"]["refresh_token"]
-CLIENT_ID = st.secrets["dropbox"]["client_id"]
-CLIENT_SECRET = st.secrets["dropbox"]["client_secret"]
+        # Timer to update the video feed
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(2)
 
-# Initialize Dropbox client
-if ACCESS_TOKEN:
-    dbx = dropbox.Dropbox(ACCESS_TOKEN)
-else:
-    st.error("Dropbox access token is missing. Please set the environment variable 'DROPBOX_OAUTH2_KEY'.")
+    def initUI(self):
+        # Set up the window
+        self.setWindowTitle("EDV QR Scanner")
+        self.image_label = QLabel(self)
+        layout = QVBoxLayout()
+        layout.addWidget(self.image_label)
+        self.setLayout(layout)
+        self.show()
 
-# Setting up file upload condition 
-uploaded_files = st.file_uploader('Upload all the documents here', type=['PDF', 'JPEG', 'JPG', 'PNG'], accept_multiple_files=True)
+    def update_frame(self):
+        success, image = self.cap.read()
+        if not success:
+            return
 
-# Function to create a folder in Dropbox
-def create_folder(folder_name):
-    try:
-        dbx.files_create_folder_v2(f"/{folder_name}")
-        return f"/{folder_name}"
-    except dropbox.exceptions.ApiError as e:
-        st.error(f"Failed to create folder: {e}")
-        return None
+        # Decode the QR code in the image
+        decoded_objs = pyzbar.decode(image)
 
-# Function to upload file to Dropbox and get the link
-def upload_to_dropbox(uploaded_file, folder_path):
-    try:
-        file_path = f"{folder_path}/{uploaded_file.name}"
-        dbx.files_upload(uploaded_file.getbuffer().tobytes(), file_path)
-        return file_path  # Return the path of the uploaded file
-    except Exception as e:
-        st.error(f"An error occurred while uploading the file: {e}")
-        return None
+        if decoded_objs:
+            for obj in decoded_objs:
+                data = obj.data.decode('utf-8')
+                metadata = json.loads(data)
 
-# Function to generate a shared link for the folder
-def get_shared_link(folder_path):
-    try:
-        shared_link_metadata = dbx.sharing_list_shared_links(folder_path)
-        if shared_link_metadata.links:
-            return shared_link_metadata.links[0].url
+                document_url = metadata.get("document_url")
+                document_type = metadata.get("document_type")
+
+                if document_type == "Aadhaar":
+                    # Fetch and verify Aadhaar document
+                    self.verify_aadhaar(document_url)
+                else:
+                    # Open non-Aadhaar document in a browser
+                    webbrowser.open(document_url)
+
+                break  # Stop after processing the first QR code
+
+        # Convert the image to RGB and display it
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(convert_to_qt_format)
+        self.image_label.setPixmap(pixmap)
+
+    def verify_aadhaar(self, document_url):
+        response = requests.get(document_url)
+        document_content = response.content
+
+        # Example assumes document is a PDF containing text
+        pdf_reader = PdfFileReader(io.BytesIO(document_content))
+        text = ""
+        for page_num in range(pdf_reader.numPages):
+            text += pdf_reader.getPage(page_num).extractText()
+
+        # Extract Aadhaar number using regex
+        aadhaar_match = re.search(r'\d{4}\s\d{4}\s\d{4}', text)
+        if aadhaar_match:
+            aadhaar_number = aadhaar_match.group(0)
+            if self.validate_aadhaar(aadhaar_number):
+                print(f"Valid Aadhaar: {aadhaar_number}")
+            else:
+                print(f"Invalid Aadhaar: {aadhaar_number}")
         else:
-            shared_link_metadata = dbx.sharing_create_shared_link_with_settings(folder_path)
-            return shared_link_metadata.url
-    except Exception as e:
-        st.error(f"An error occurred while getting shared link: {e}")
-        return None
+            print("No Aadhaar number found in the document.")
 
-# Function to generate QR code from a link
-def generate_qr_code(link):
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(link)
-    qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    return img
+    def validate_aadhaar(self, aadhaar_number):
+        # Simple validation logic (e.g., checksum validation) or integrate with a government API
+        # Placeholder logic for now
+        return True  # For demo purposes
 
-# Function to convert PIL Image to bytes
-def pil_image_to_bytes(img):
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    byte_im = buf.getvalue()
-    return byte_im
+    def closeEvent(self, event):
+        self.cap.release()
+        cv2.destroyAllWindows()
 
-# Refresh access token function
-def refresh_access_token(refresh_token):
-    url = "https://api.dropboxapi.com/oauth2/token"
-    data = {
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-    }
-    response = requests.post(url, data=data)
-    if response.status_code == 200:
-        return response.json().get("access_token"), response.json().get("refresh_token")
-    else:
-        st.error(f"Failed to refresh access token: {response.json()}")
-        return None, None
-
-# Check if access token is still valid (you may implement your own logic for this)
-def check_access_token():
-    try:
-        dbx.users_get_current_account()
-        return True
-    except dropbox.exceptions.AuthError:
-        return False
-
-# Upload multiple files to Dropbox and generate QR code for the folder
-if uploaded_files:
-    if not check_access_token():
-        ACCESS_TOKEN, REFRESH_TOKEN = refresh_access_token(REFRESH_TOKEN)
-        dbx = dropbox.Dropbox(ACCESS_TOKEN)
-
-    # Create a unique folder name using UUID
-    folder_name = f"Uploaded_Files_{uuid.uuid4()}"
-    folder_path = create_folder(folder_name)
-
-    if folder_path:
-        # Loop through each file and upload it to the new folder
-        for uploaded_file in uploaded_files:
-            upload_to_dropbox(uploaded_file, folder_path)
-
-        # Get shared link for the folder
-        folder_link = get_shared_link(folder_path)
-        if folder_link:
-            st.markdown(f"[** View uploaded files**]({folder_link})", unsafe_allow_html=True)
-            
-            # Generate and display the QR code for the folder link
-            qr_image = generate_qr_code(folder_link)
-            qr_image_bytes = pil_image_to_bytes(qr_image)
-            st.image(qr_image_bytes, caption='QR code for the folder link')
-            
-            # Provide download button for the QR code
-            st.download_button(label="Download QR code for folder",
-                               data=qr_image_bytes,
-                               file_name=f"qr_code_{folder_name}.png",
-                               mime="image/png")
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    qr_scanner_app = QRScannerApp()
+    sys.exit(app.exec_())
