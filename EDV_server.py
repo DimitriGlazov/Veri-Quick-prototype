@@ -5,6 +5,7 @@ import qrcode
 from PIL import Image
 import json
 import io
+import requests
 
 # Homepage
 st.set_page_config(page_title=" 🗄️ EDV file uploader")
@@ -20,6 +21,23 @@ CLIENT_SECRET = st.secrets["dropbox"]["client_secret"]
 # Initialize Dropbox client
 dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
+# Function to refresh access token
+def refresh_access_token():
+    url = "https://api.dropboxapi.com/oauth2/token"
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": REFRESH_TOKEN,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+    }
+    response = requests.post(url, data=data)
+    
+    if response.status_code == 200:
+        return response.json().get("access_token"), response.json().get("refresh_token")
+    else:
+        st.error(f"Failed to refresh access token: {response.json()}")
+        return None, None
+
 # Function to upload a file to Dropbox and get the link
 def upload_to_dropbox(uploadedfile, filename):
     try:
@@ -28,9 +46,20 @@ def upload_to_dropbox(uploadedfile, filename):
         shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
         file_link = shared_link_metadata.url.replace('?dl=0', '?dl=1')  # Direct download link
         return file_link
-    except Exception as e:
-        st.error(f"An error occurred while uploading the file: {e}")
-        return None
+    except dropbox.exceptions.AuthError as e:
+        # If there's an auth error, refresh the access token
+        st.warning("Access token expired. Refreshing token...")
+        new_access_token, new_refresh_token = refresh_access_token()
+        if new_access_token:
+            global ACCESS_TOKEN, REFRESH_TOKEN
+            ACCESS_TOKEN = new_access_token
+            REFRESH_TOKEN = new_refresh_token
+            dbx = dropbox.Dropbox(ACCESS_TOKEN)
+            # Retry file upload after refreshing token
+            return upload_to_dropbox(uploadedfile, filename)
+        else:
+            st.error("Failed to refresh access token. Please check your credentials.")
+            return None
 
 # Function to generate QR code with metadata
 def generate_qr_code_with_metadata(files_metadata):
