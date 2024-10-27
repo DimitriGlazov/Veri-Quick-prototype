@@ -9,7 +9,7 @@ from requests.auth import HTTPBasicAuth
 import re
 
 # Streamlit app configuration
-st.set_page_config(page_title="EDV Server - Document Upload and QR Generation")
+st.set_page_config(page_title="Veriquick ✅")
 st.header("EDV Document Uploader")
 st.subheader("Upload and verify documents with QR code generation")
 
