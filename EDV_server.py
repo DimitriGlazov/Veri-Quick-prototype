@@ -71,6 +71,8 @@ def upload_and_generate_metadata(uploaded_files):
     if files_metadata:
         qr_metadata = json.dumps({"files": files_metadata})
         qr_code_image = generate_qr_code(qr_metadata)
+        st.write(f"Type of qr_code_image: {type(qr_code_image)}")  # Debug print to check image type
+        qr_code_image = qr_code_image.convert("RGB")  # Convert image mode if necessary
         qr_code_bytes = pil_image_to_bytes(qr_code_image)
         # Display and download QR code
         st.image(qr_code_image, caption="QR Code for Uploaded Documents")
