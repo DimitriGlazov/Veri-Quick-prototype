@@ -59,8 +59,18 @@ def upload_and_generate_metadata(uploaded_files):
             # Convert to binary before uploading to Dropbox
             file_binary = io.BytesIO(file.read())  # Converts memoryview to BytesIO
             
-            dbx.files_upload(file_binary.getvalue(), file_path)  # Upload as binary content
+            # Upload as binary content
+            dbx.files_upload(file_binary.getvalue(), file_path)
+
+            # Delete any existing shared link
+            existing_links = dbx.sharing_list_shared_links(file_path).links
+            if existing_links:
+                for link in existing_links:
+                    dbx.sharing_revoke_shared_link(link.url)
+
+            # Create a new shared link
             shared_link = dbx.sharing_create_shared_link_with_settings(file_path).url
+
             file_type = identify_document_type(file)
             files_metadata.append({
                 "document_url": shared_link,
@@ -71,8 +81,7 @@ def upload_and_generate_metadata(uploaded_files):
     if files_metadata:
         qr_metadata = json.dumps({"files": files_metadata})
         qr_code_image = generate_qr_code(qr_metadata)
-        st.write(f"Type of qr_code_image: {type(qr_code_image)}")  # Debug print to check image type
-        qr_code_image = qr_code_image.convert("RGB")  # Convert image mode if necessary
+        qr_code_image = qr_code_image.convert("RGB")  # Ensure the image is in RGB format
         qr_code_bytes = pil_image_to_bytes(qr_code_image)
         # Display and download QR code
         st.image(qr_code_image, caption="QR Code for Uploaded Documents")
