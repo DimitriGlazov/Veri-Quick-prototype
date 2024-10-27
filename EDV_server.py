@@ -6,11 +6,12 @@ import io
 import json
 import requests
 from requests.auth import HTTPBasicAuth
+import re
 
 # Streamlit app configuration
-st.set_page_config(page_title=" Veri quick ✅ ©️")
-st.header("Veri quick©️ ✅ ")
-st.subheader(" Making paperless and qucik verifications ")
+st.set_page_config(page_title="EDV Server - Document Upload and QR Generation")
+st.header("EDV Document Uploader")
+st.subheader("Upload and verify documents with QR code generation")
 
 # Dropbox API configuration
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
@@ -20,6 +21,7 @@ CLIENT_SECRET = st.secrets["dropbox"]["client_secret"]
 
 # Refresh token if needed
 def refresh_access_token():
+    global ACCESS_TOKEN  # Update in memory only
     token_url = "https://api.dropbox.com/oauth2/token"
     refresh_params = {
         "grant_type": "refresh_token",
@@ -31,10 +33,7 @@ def refresh_access_token():
     
     if response.status_code == 200:
         new_access_token = response.json().get("access_token")
-        # Update global ACCESS_TOKEN with the new token
-        global ACCESS_TOKEN
-        ACCESS_TOKEN = new_access_token
-        st.secrets["dropbox"]["access_token"] = new_access_token  # Update Streamlit secrets dynamically
+        ACCESS_TOKEN = new_access_token  # Update the token only in memory
     else:
         st.error("Failed to refresh Dropbox access token. Please check your credentials.")
 
@@ -45,7 +44,6 @@ def init_dropbox():
         dbx.users_get_current_account()  # Check if token is valid
         return dbx
     except dropbox.exceptions.AuthError:
-        # If token is expired, refresh and retry
         st.warning("Access token expired. Refreshing...")
         refresh_access_token()
         return dropbox.Dropbox(ACCESS_TOKEN)
@@ -61,13 +59,12 @@ def upload_and_generate_metadata(uploaded_files):
             file_path = f"/{file.name}"
             dbx.files_upload(file.getbuffer(), file_path)
             shared_link = dbx.sharing_create_shared_link_with_settings(file_path).url
-            doc_type = identify_document_type(file.name)
+            file_type = identify_document_type(file)
 
-            if doc_type:
-                files_metadata.append({
-                    "document_url": shared_link,
-                    "document_type": doc_type
-                })
+            files_metadata.append({
+                "document_url": shared_link,
+                "document_type": file_type
+            })
         except Exception as e:
             st.error(f"Error uploading {file.name}: {e}")
 
@@ -80,16 +77,20 @@ def upload_and_generate_metadata(uploaded_files):
         st.image(qr_code_image, caption="QR Code for Uploaded Documents")
         st.download_button("Download QR Code", data=qr_code_bytes, file_name="qr_code.png", mime="image/png")
 
-# Document type identification based on filename
-def identify_document_type(filename):
-    if "aadhar" in filename.lower():
-        return "Aadhaar"
-    elif "pan" in filename.lower():
+# Document type identification based on file content
+def identify_document_type(file):
+    file.seek(0)  # Reset file pointer to the beginning
+    content = file.read().decode('utf-8', errors='ignore')  # Decode content as text
+
+    # Check for keywords for Aadhaar, PAN, and Marksheet
+    if re.search(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b", content):  # PAN format
         return "PAN"
-    elif "marksheet" in filename.lower():
+    elif re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", content):  # Aadhaar format
+        return "Aadhaar"
+    elif re.search(r"\b(Board\s+Marks|CBSE|ICSE|Class\s+\d+)", content, re.IGNORECASE):  # Marks related words
         return "Marksheet"
     else:
-        return None
+        return "Unknown"
 
 # QR code generation
 def generate_qr_code(data):
