@@ -107,6 +107,7 @@ def generate_qr_code(data):
 def pil_image_to_bytes(img):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
+    buf.seek(0)  # Important: reset buffer position to the beginning
     return buf.getvalue()
 
 # Main upload and processing
