@@ -9,7 +9,7 @@ from requests.auth import HTTPBasicAuth
 import re
 
 # Streamlit app configuration
-st.set_page_config(page_title="Veriquick ✅")
+st.set_page_config(page_title="EDV Server - Document Upload and QR Generation")
 st.header("EDV Document Uploader")
 st.subheader("Upload and verify documents with QR code generation")
 
@@ -97,8 +97,11 @@ def identify_document_type(file):
 
 # QR code generation
 def generate_qr_code(data):
-    qr = qrcode.make(data)
-    return qr
+    qr = qrcode.QRCode()
+    qr.add_data(data)
+    qr.make(fit=True)
+    qr_image = qr.make_image(fill="black", back_color="white")
+    return qr_image
 
 # Convert PIL image to bytes
 def pil_image_to_bytes(img):
