@@ -1,3 +1,4 @@
+# Importing Modules
 import streamlit as st
 import dropbox
 import qrcode
@@ -30,7 +31,6 @@ def refresh_access_token():
     auth = HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
     
     response = requests.post(token_url, data=refresh_params, auth=auth)
-    
     if response.status_code == 200:
         new_access_token = response.json().get("access_token")
         ACCESS_TOKEN = new_access_token  # Update the token only in memory
@@ -53,7 +53,6 @@ dbx = init_dropbox()
 # Upload files to Dropbox and generate QR metadata
 def upload_and_generate_metadata(uploaded_files):
     files_metadata = []
-
     for file in uploaded_files:
         try:
             file_path = f"/{file.name}"
@@ -63,19 +62,16 @@ def upload_and_generate_metadata(uploaded_files):
             dbx.files_upload(file_binary.getvalue(), file_path)  # Upload as binary content
             shared_link = dbx.sharing_create_shared_link_with_settings(file_path).url
             file_type = identify_document_type(file)
-
             files_metadata.append({
                 "document_url": shared_link,
                 "document_type": file_type
             })
         except Exception as e:
             st.error(f"Error uploading {file.name}: {e}")
-
     if files_metadata:
         qr_metadata = json.dumps({"files": files_metadata})
         qr_code_image = generate_qr_code(qr_metadata)
         qr_code_bytes = pil_image_to_bytes(qr_code_image)
-
         # Display and download QR code
         st.image(qr_code_image, caption="QR Code for Uploaded Documents")
         st.download_button("Download QR Code", data=qr_code_bytes, file_name="qr_code.png", mime="image/png")
@@ -84,7 +80,6 @@ def upload_and_generate_metadata(uploaded_files):
 def identify_document_type(file):
     file.seek(0)  # Reset file pointer to the beginning
     content = file.read().decode('utf-8', errors='ignore')  # Decode content as text
-
     # Check for keywords for Aadhaar, PAN, and Marksheet
     if re.search(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b", content):  # PAN format
         return "PAN"
@@ -112,6 +107,5 @@ def pil_image_to_bytes(img):
 
 # Main upload and processing
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
-
 if uploaded_files:
     upload_and_generate_metadata(uploaded_files)
