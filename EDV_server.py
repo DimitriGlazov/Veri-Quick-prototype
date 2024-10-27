@@ -57,7 +57,10 @@ def upload_and_generate_metadata(uploaded_files):
     for file in uploaded_files:
         try:
             file_path = f"/{file.name}"
-            dbx.files_upload(file.getbuffer(), file_path)
+            # Convert to binary before uploading to Dropbox
+            file_binary = io.BytesIO(file.read())  # Converts memoryview to BytesIO
+            
+            dbx.files_upload(file_binary.getvalue(), file_path)  # Upload as binary content
             shared_link = dbx.sharing_create_shared_link_with_settings(file_path).url
             file_type = identify_document_type(file)
 
