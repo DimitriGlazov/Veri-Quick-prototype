@@ -1,113 +1,109 @@
-# Importing necessary modules
 import streamlit as st
 import dropbox
 import qrcode
 from PIL import Image
-import json
 import io
+import json
 import requests
+from requests.auth import HTTPBasicAuth
 
-# Homepage
-st.set_page_config(page_title=" 🗄️ EDV file uploader")
-st.header("EDV file uploader")
-st.subheader('Upload files to store and retrieve Dropbox links and QR codes')
+# Streamlit app configuration
+st.set_page_config(page_title=" Veri quick ✅ ©️")
+st.header("Veri quick©️ ✅ ")
+st.subheader(" Making paperless and qucik verifications ")
 
-# Get secrets from Streamlit secrets management
+# Dropbox API configuration
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
 REFRESH_TOKEN = st.secrets["dropbox"]["refresh_token"]
 CLIENT_ID = st.secrets["dropbox"]["client_id"]
 CLIENT_SECRET = st.secrets["dropbox"]["client_secret"]
 
-# Initialize Dropbox client
-dbx = dropbox.Dropbox(ACCESS_TOKEN)
-
-# Function to refresh access token
+# Refresh token if needed
 def refresh_access_token():
-    global ACCESS_TOKEN, REFRESH_TOKEN, dbx  # Declare global variables
-    url = "https://api.dropboxapi.com/oauth2/token"
-    data = {
+    token_url = "https://api.dropbox.com/oauth2/token"
+    refresh_params = {
         "grant_type": "refresh_token",
-        "refresh_token": REFRESH_TOKEN,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "refresh_token": REFRESH_TOKEN
     }
-    response = requests.post(url, data=data)
+    auth = HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
+    
+    response = requests.post(token_url, data=refresh_params, auth=auth)
     
     if response.status_code == 200:
-        # Update global variables with new tokens
-        ACCESS_TOKEN = response.json().get("access_token")
-        REFRESH_TOKEN = response.json().get("refresh_token")
-        dbx = dropbox.Dropbox(ACCESS_TOKEN)  # Re-initialize Dropbox client
-        return True
+        new_access_token = response.json().get("access_token")
+        # Update global ACCESS_TOKEN with the new token
+        global ACCESS_TOKEN
+        ACCESS_TOKEN = new_access_token
+        st.secrets["dropbox"]["access_token"] = new_access_token  # Update Streamlit secrets dynamically
     else:
-        st.error(f"Failed to refresh access token: {response.json()}")
-        return False
+        st.error("Failed to refresh Dropbox access token. Please check your credentials.")
 
-# Function to upload a file to Dropbox and get the link
-def upload_to_dropbox(uploadedfile, filename):
-    global dbx  # Declare dbx as global
+# Initialize Dropbox client with refreshed token if needed
+def init_dropbox():
     try:
-        file_path = f"/EDV/{filename}"
-        dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
-        shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
-        file_link = shared_link_metadata.url.replace('?dl=0', '?dl=1')  # Direct download link
-        return file_link
-    except dropbox.exceptions.AuthError as e:
-        # If there's an auth error, refresh the access token
-        st.warning("Access token expired. Refreshing token...")
-        if refresh_access_token():
-            # Retry file upload after refreshing token
-            return upload_to_dropbox(uploadedfile, filename)
-        else:
-            st.error("Failed to refresh access token. Please check your credentials.")
-            return None
+        dbx = dropbox.Dropbox(ACCESS_TOKEN)
+        dbx.users_get_current_account()  # Check if token is valid
+        return dbx
+    except dropbox.exceptions.AuthError:
+        # If token is expired, refresh and retry
+        st.warning("Access token expired. Refreshing...")
+        refresh_access_token()
+        return dropbox.Dropbox(ACCESS_TOKEN)
 
-# Function to generate QR code with metadata
-def generate_qr_code_with_metadata(files_metadata):
-    metadata = {"files": files_metadata}  # Embed list of files and their metadata
-    qr_data = json.dumps(metadata)
-    
-    # Generate the QR code
-    qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(qr_data)
-    qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    
-    return img
+dbx = init_dropbox()
 
-# Function to convert PIL Image to bytes
+# Upload files to Dropbox and generate QR metadata
+def upload_and_generate_metadata(uploaded_files):
+    files_metadata = []
+
+    for file in uploaded_files:
+        try:
+            file_path = f"/{file.name}"
+            dbx.files_upload(file.getbuffer(), file_path)
+            shared_link = dbx.sharing_create_shared_link_with_settings(file_path).url
+            doc_type = identify_document_type(file.name)
+
+            if doc_type:
+                files_metadata.append({
+                    "document_url": shared_link,
+                    "document_type": doc_type
+                })
+        except Exception as e:
+            st.error(f"Error uploading {file.name}: {e}")
+
+    if files_metadata:
+        qr_metadata = json.dumps({"files": files_metadata})
+        qr_code_image = generate_qr_code(qr_metadata)
+        qr_code_bytes = pil_image_to_bytes(qr_code_image)
+
+        # Display and download QR code
+        st.image(qr_code_image, caption="QR Code for Uploaded Documents")
+        st.download_button("Download QR Code", data=qr_code_bytes, file_name="qr_code.png", mime="image/png")
+
+# Document type identification based on filename
+def identify_document_type(filename):
+    if "aadhar" in filename.lower():
+        return "Aadhaar"
+    elif "pan" in filename.lower():
+        return "PAN"
+    elif "marksheet" in filename.lower():
+        return "Marksheet"
+    else:
+        return None
+
+# QR code generation
+def generate_qr_code(data):
+    qr = qrcode.make(data)
+    return qr
+
+# Convert PIL image to bytes
 def pil_image_to_bytes(img):
     buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    byte_im = buf.getvalue()
-    return byte_im
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
-# Upload section
-uploaded_files = st.file_uploader('Upload multiple documents (Aadhaar, PAN, etc.)', type=['pdf', 'jpeg', 'jpg', 'png'], accept_multiple_files=True)
+# Main upload and processing
+uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
 
-if uploaded_files is not None:
-    files_metadata = []
-    
-    # Loop through each uploaded file
-    for uploaded_file in uploaded_files:
-        document_type = st.selectbox(f"Select document type for {uploaded_file.name}", ["Aadhaar", "PAN", "Passport", "Other"])
-        
-        # Upload file to Dropbox
-        file_link = upload_to_dropbox(uploaded_file, uploaded_file.name)
-        if file_link:
-            # Add file metadata (link and document type)
-            files_metadata.append({
-                "document_url": file_link,
-                "document_type": document_type
-            })
-    
-    # Generate QR code for all uploaded files' metadata
-    if files_metadata:
-        qr_image = generate_qr_code_with_metadata(files_metadata)
-        qr_image_bytes = pil_image_to_bytes(qr_image)
-        
-        # Display QR code
-        st.image(qr_image_bytes, caption='QR code with metadata for uploaded files')
-        
-        # Download button for QR code
-        st.download_button(label="Download QR code", data=qr_image_bytes, file_name="qr_code.png", mime="image/png")
+if uploaded_files:
+    upload_and_generate_metadata(uploaded_files)
