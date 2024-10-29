@@ -6,6 +6,8 @@ from PIL import Image
 import json
 import io
 import requests
+import PyPDF2  # Importing PyPDF2 to read PDF files
+import re  # For regex operations
 
 # Homepage setup
 st.set_page_config(page_title=" 🗄️ EDV file uploader")
@@ -52,12 +54,25 @@ def upload_to_dropbox(uploadedfile, filename):
         file_link = shared_link_metadata.url.replace('?dl=0', '?dl=1')
         return file_link
     except dropbox.exceptions.AuthError as e:
-        
         if refresh_access_token():
             return upload_to_dropbox(uploadedfile, filename)
         else:
             st.error("Failed to refresh access token. Please check your credentials.")
             return None
+
+# Function to read PDF and extract Aadhaar numbers
+def extract_aadhaar_from_pdf(file):
+    aadhaar_numbers = []
+    
+    # Read the PDF file
+    pdf_reader = PyPDF2.PdfReader(file)
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        # Regex to find Aadhaar numbers (12 digits)
+        found_numbers = re.findall(r'\b\d{4}\s*\d{4}\s*\d{4}\b', text)
+        aadhaar_numbers.extend(found_numbers)
+    
+    return aadhaar_numbers
 
 # Function to generate QR code with metadata
 def generate_qr_code_with_metadata(files_metadata):
@@ -84,13 +99,18 @@ if uploaded_files is not None:
     files_metadata = []
     
     for uploaded_file in uploaded_files:
-        document_type = st.selectbox(f"Select document type for {uploaded_file.name}", ["Aadhaar", "PAN", "Passport", "Other"])
-        
+        # Upload file to Dropbox
         file_link = upload_to_dropbox(uploaded_file, uploaded_file.name)
         if file_link:
+            # Check for Aadhaar numbers in the PDF
+            aadhaar_numbers = extract_aadhaar_from_pdf(uploaded_file)
+            document_type = "Aadhaar" if aadhaar_numbers else "Other"
+
+            # Prepare metadata
             files_metadata.append({
                 "document_url": file_link,
-                "document_type": document_type
+                "document_type": document_type,
+                "aadhaar_numbers": aadhaar_numbers  # Store found Aadhaar numbers
             })
     
     if files_metadata:
