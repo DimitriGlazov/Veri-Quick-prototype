@@ -1,12 +1,3 @@
-"""
-Creating a web Server to make sure the EDV's function 
-Process:
-1. File upload condition  
-2. Data storage and execution with the links 
-3. Retrieve the file link in the QR format to make the application redirect 
-to the created link 
-"""
-
 # Importing necessary modules
 import streamlit as st
 import dropbox
@@ -67,7 +58,7 @@ def upload_to_dropbox(uploadedfile, filename):
             return None
 
 # Function to detect Aadhaar numbers in a PDF
-def extract_aadhaar_numbers(file):
+def detect_aadhaar_in_pdf(file):
     pdf_reader = PdfReader(file)
     full_text = ""
     for page in pdf_reader.pages:
@@ -76,6 +67,14 @@ def extract_aadhaar_numbers(file):
     aadhaar_pattern = r"\b\d{4}\s\d{4}\s\d{4}\b"
     aadhaar_numbers = re.findall(aadhaar_pattern, full_text)
     return list(set(aadhaar_numbers)) if aadhaar_numbers else []
+
+# Function to determine document type
+def determine_document_type(file):
+    aadhaar_numbers = detect_aadhaar_in_pdf(file)
+    if aadhaar_numbers:
+        return "Aadhaar", aadhaar_numbers
+    else:
+        return "Other", []
 
 # Function to generate QR code with metadata
 def generate_qr_code_with_metadata(files_metadata):
@@ -93,30 +92,31 @@ def pil_image_to_bytes(img):
     return buf.getvalue()
 
 # Upload section
-uploaded_files = st.file_uploader("Upload multiple documents (Aadhaar, PAN, etc.)", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload multiple documents (PDF only)", type=["pdf"], accept_multiple_files=True)
 
-if uploaded_files is not None:
+if uploaded_files:
     files_metadata = []
 
     for uploaded_file in uploaded_files:
         file_name = uploaded_file.name
-        document_type = st.selectbox(f"Select document type for {file_name}", ["Aadhaar", "PAN", "Passport", "Other"])
-
-        # Upload file to Dropbox
+        
+        # Upload file to Dropbox and get file link
         file_link = upload_to_dropbox(uploaded_file, file_name)
         if file_link:
-            metadata_entry = {"document_url": file_link, "document_type": document_type}
+            document_type, aadhaar_numbers = determine_document_type(uploaded_file)
             
-            # Aadhaar detection for document type Aadhaar
-            if document_type == "Aadhaar":
-                aadhaar_numbers = extract_aadhaar_numbers(uploaded_file)
-                metadata_entry["aadhaar_numbers"] = aadhaar_numbers
-
+            metadata_entry = {
+                "document_url": file_link,
+                "document_type": document_type,
+                "aadhaar_numbers": aadhaar_numbers
+            }
             files_metadata.append(metadata_entry)
 
+    # Generate QR code if metadata was created
     if files_metadata:
         qr_image = generate_qr_code_with_metadata(files_metadata)
         qr_image_bytes = pil_image_to_bytes(qr_image)
 
+        # Display QR code
         st.image(qr_image_bytes, caption="QR code with metadata for uploaded files")
         st.download_button(label="Download QR code", data=qr_image_bytes, file_name="qr_code.png", mime="image/png")
