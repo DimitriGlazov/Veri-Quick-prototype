@@ -12,7 +12,7 @@ from PyPDF2 import PdfReader
 # Homepage setup
 st.set_page_config(page_title=" 🗄️ Veriquick Document Uploader")
 st.header("Veriquick ✅")
-st.subheader("Upload documents to store, retrieve Dropbox links, and generate QR codes with metadata")
+st.subheader(" Let's make documentation quick ")
 
 # Dropbox configuration from Streamlit secrets
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
