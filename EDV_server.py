@@ -6,11 +6,13 @@ from PIL import Image
 import json
 import io
 import requests
+import re
+from datetime import datetime
 
 # Homepage setup
 st.set_page_config(page_title="🗄️ Veriquick File Uploader")
 st.header("Veriquick ✅")
-st.subheader("Let's make documentation quick")
+st.subheader("Upload files to store and retrieve Dropbox links and QR codes")
 
 # Get secrets from Streamlit secrets management
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
@@ -44,18 +46,19 @@ def refresh_access_token():
 # Function to upload a file to Dropbox and get the link
 def upload_to_dropbox(uploadedfile, filename):
     global dbx
+    # Append timestamp to filename to avoid duplicates
+    unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+    file_path = f"/Veriquick/{unique_filename}"
+
     try:
-        file_path = f"/Veriquick/{filename}"
-        
-        # Check if a shared link already exists
-        shared_link_metadata = dbx.sharing_list_shared_links(file_path)
-        if shared_link_metadata.links:
-            file_link = shared_link_metadata.links[0].url.replace('?dl=0', '?dl=1')  # Convert to direct download link
-            st.info(f"Using existing shared link for {filename}.")
-            return file_link
-        
-        # If no link exists, upload file and create a new shared link
+        # Upload file to Dropbox
         dbx.files_upload(uploadedfile.getbuffer().tobytes(), file_path)
+        
+        # Revoke any existing shared links and create a new one
+        existing_links = dbx.sharing_list_shared_links(file_path).links
+        for link in existing_links:
+            dbx.sharing_revoke_shared_link(link.url)
+
         shared_link_metadata = dbx.sharing_create_shared_link_with_settings(file_path)
         file_link = shared_link_metadata.url.replace('?dl=0', '?dl=1')
         return file_link
@@ -105,10 +108,9 @@ if uploaded_files:
     files_metadata = []
     
     for uploaded_file in uploaded_files:
-        # Extract content to detect document type
         try:
             content = uploaded_file.read().decode('utf-8', errors='ignore')
-        except Exception as e:
+        except Exception:
             content = ""
         
         document_type = identify_document_type(content)
@@ -121,7 +123,6 @@ if uploaded_files:
                 "aadhaar_numbers": re.findall(r"\b\d{4}\s\d{4}\s\d{4}\b", content) if document_type == "Aadhaar" else []
             })
     
-    # Generate and display QR code with metadata
     if files_metadata:
         qr_image = generate_qr_code_with_metadata(files_metadata)
         qr_image_bytes = pil_image_to_bytes(qr_image)
