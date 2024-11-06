@@ -1,3 +1,4 @@
+# Importing necessary modules
 import streamlit as st
 import dropbox
 import json
@@ -6,6 +7,7 @@ from datetime import datetime
 import qrcode
 from io import BytesIO
 import requests
+import fitz  # PyMuPDF for better PDF text extraction
 
 # Dropbox credentials
 ACCESS_TOKEN = st.secrets["dropbox"]["access_token"]
@@ -62,18 +64,30 @@ def upload_file_to_dropbox(file, filename):
         return None
 
 # Function to extract Aadhaar and PAN metadata from content
-def extract_metadata(content, file_url):
+def extract_metadata_from_pdf(file_content, file_url):
     metadata = {"document_url": file_url, "document_type": "Other", "aadhaar_numbers": [], "pan_numbers": []}
 
-    aadhaar_numbers = re.findall(AADHAAR_REGEX, content)
-    pan_numbers = re.findall(PAN_REGEX, content)
+    try:
+        # Read PDF content using PyMuPDF
+        pdf_document = fitz.open("pdf", file_content)
+        text_content = ""
+        for page in pdf_document:
+            text_content += page.get_text()
+        
+        # Extract Aadhaar and PAN numbers from text
+        aadhaar_numbers = re.findall(AADHAAR_REGEX, text_content)
+        pan_numbers = re.findall(PAN_REGEX, text_content)
 
-    if aadhaar_numbers:
-        metadata["document_type"] = "Aadhaar"
-        metadata["aadhaar_numbers"] = aadhaar_numbers
-    elif pan_numbers:
-        metadata["document_type"] = "PAN"
-        metadata["pan_numbers"] = pan_numbers
+        # Update metadata based on detected document types
+        if aadhaar_numbers:
+            metadata["document_type"] = "Aadhaar"
+            metadata["aadhaar_numbers"] = aadhaar_numbers
+        elif pan_numbers:
+            metadata["document_type"] = "PAN"
+            metadata["pan_numbers"] = pan_numbers
+
+    except Exception as e:
+        st.error(f"Error extracting metadata: {e}")
 
     return metadata
 
@@ -96,11 +110,11 @@ if uploaded_files:
     files_metadata = []
 
     for uploaded_file in uploaded_files:
-        file_content = uploaded_file.read().decode("utf-8", errors="ignore")
-        file_url = upload_file_to_dropbox(uploaded_file, uploaded_file.name)
+        file_content = BytesIO(uploaded_file.read())
+        file_url = upload_file_to_dropbox(file_content, uploaded_file.name)
         
         if file_url:
-            metadata = extract_metadata(file_content, file_url)
+            metadata = extract_metadata_from_pdf(file_content, file_url)
             files_metadata.append(metadata)
 
     # Generate and display QR code if files are uploaded
