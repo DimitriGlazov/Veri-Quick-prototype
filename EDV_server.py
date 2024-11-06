@@ -53,7 +53,7 @@ def upload_file_to_dropbox(file, filename):
         return shared_link_metadata.url.replace("?dl=0", "?dl=1")
 
     except dropbox.exceptions.AuthError:
-        st.warning("Access token expired. Refreshing token...")
+        
         if refresh_access_token():
             return upload_file_to_dropbox(file, filename)
         else:
